@@ -1,34 +1,45 @@
-name: Actualizar EPG Diario
+import json
+import xml.etree.ElementTree as ET
+from datetime import datetime
 
-on:
-  schedule:
-    - cron: '0 4 * * *'
-  workflow_dispatch: # Permite ejecutar manualmente
+# 1. Leer el archivo JSON que guardaste en tu repositorio
+with open("guia.json", "r", encoding="utf-8") as f:
+    guia_json = json.load(f)
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    # Añadimos permisos explícitos de escritura directamente en el código
-    permissions:
-      contents: write
+# 2. Crear la estructura base del archivo XMLTV
+root = ET.Element("tv", date=datetime.now().strftime("%Y%m%d"))
+channel_id = guia_json["channel"].lower().replace(" ", "_")
 
-    steps:
-    - name: Checkout del repositorio
-      uses: actions/checkout@v4
+# 3. Crear el nodo del canal
+channel_el = ET.SubElement(root, "channel", id=channel_id)
+ET.SubElement(channel_el, "display-name").text = guia_json["channel"]
 
-    - name: Configurar Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+# 4. Recorrer y convertir cada programa de la lista
+for p in guia_json["programmes"]:
+    # Limpiar y adaptar los horarios al estándar XMLTV (ej: 20261021180436 +0000)
+    start_time = p["start"].replace("-", "").replace(":", "").replace("T", " ")[:-3] + "00"
+    stop_time = p["stop"].replace("-", "").replace(":", "").replace("T", " ")[:-3] + "00"
+    
+    # Crear el nodo del programa con sus atributos
+    prog_el = ET.SubElement(root, "programme", start=start_time, stop=stop_time, channel=channel_id)
+    
+    # Agregar las etiquetas de información básicas
+    ET.SubElement(prog_el, "title", lang="es").text = p["title"]
+    
+    # Comprobar si el programa tiene un subtítulo asignado antes de agregarlo
+    if "subtitle" in p and p["subtitle"]:
+        ET.SubElement(prog_el, "sub-title", lang="es").text = p["subtitle"]
+        
+    ET.SubElement(prog_el, "desc", lang="es").text = p["desc"]
+    ET.SubElement(prog_el, "category", lang="es").text = p["category"]
+    ET.SubElement(prog_el, "icon", src=p["icon"])
 
-    - name: Ejecutar script de conversión
-      run: python convertir.py
+# 5. Generar el árbol XML
+tree = ET.ElementTree(root)
 
-    - name: Guardar cambios de forma segura
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "41898282+github-actions[bot]@://github.com"
-        git add guia_tv.xml
-        # Evita errores si el archivo no ha cambiado y fuerza la subida
-        git commit -m "Actualización automática de EPG" || echo "No hay cambios que subir"
-        git push origin main || git push origin master
+# ✨ MODIFICACIÓN: Aplicar formato estético (Pretty Print) con saltos de línea y espacios
+ET.indent(tree, space="  ", level=0)
+
+# 6. Guardar el archivo ordenado en la raíz del repositorio
+tree.write("guia_tv.xml", encoding="utf-8", xml_declaration=True)
+print("¡Archivo guia_tv.xml generado y ordenado con éxito!")
