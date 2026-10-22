@@ -2,13 +2,15 @@ name: Actualizar EPG Diario
 
 on:
   schedule:
-    # Se ejecuta automáticamente todos los días a las 04:00 AM UTC
     - cron: '0 4 * * *'
-  workflow_dispatch: # Te permite ejecutarlo manualmente cuando quieras
+  workflow_dispatch: # Permite ejecutar manualmente
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Añadimos permisos explícitos de escritura directamente en el código
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout del repositorio
@@ -22,10 +24,11 @@ jobs:
     - name: Ejecutar script de conversión
       run: python convertir.py
 
-    - name: Hacer Commit y Push del XML generado
+    - name: Guardar cambios de forma segura
       run: |
-        git config --global user.name "GitHub Action"
-        git config --global user.email "actions@github.com"
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@://github.com"
         git add guia_tv.xml
-        git commit -m "Actualización automática de EPG" || exit 0
-        git push
+        # Evita errores si el archivo no ha cambiado y fuerza la subida
+        git commit -m "Actualización automática de EPG" || echo "No hay cambios que subir"
+        git push origin main || git push origin master
